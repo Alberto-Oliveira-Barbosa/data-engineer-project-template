@@ -1,0 +1,18 @@
+# Core
+apache-airflow==2.10.5
+psycopg2-binary==2.9.*
+python-dotenv==1.1.*
+cryptography==44.0.*
+minio==7.2.*
+
+# Providers
+apache-airflow-providers-apache-spark==5.1.*
+apache-airflow-providers-amazon==9.5.*
+
+# Data Processing
+pyspark==3.5.*
+pandas==2.2.*
+pyarrow==19.0.*
+boto3==1.37.*
+selenium==4.31.*
+

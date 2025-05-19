@@ -1,0 +1,80 @@
+services:
+  postgres:
+    image: postgres:${POSTGRES_VERSION}
+    env_file: .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - ./postgres/data:/var/lib/postgresql/data
+      - ./postgres/backups:/backups
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - data-net
+
+  minio:
+    image: minio/minio
+    hostname: minio
+    env_file: .env
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    command: server --console-address ":9001" /data
+    volumes:
+      - ./minio/data:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks:
+      - data-net
+
+  airflow-webserver:
+    build:
+      context: .  # Pasta raiz do projeto
+      dockerfile: ./airflow/Dockerfile
+    env_file: .env
+    environment:
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: ${AIRFLOW__DATABASE__SQL_ALCHEMY_CONN}
+      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW__CORE__FERNET_KEY}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      BUCKETS_LIST: ${BUCKETS_LIST}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    user: "${AIRFLOW_UID}:0"  # Garante que o usuário tenha permissão no container
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/plugins:/opt/airflow/plugins
+      - ./airflow/logs:/opt/airflow/logs:z
+      - ./airflow/config:/opt/airflow/config
+      - ./scripts/init:/scripts
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - data-net
+
+networks:
+  data-net:
+    driver: bridge
+    name: ${COMPOSE_PROJECT_NAME}-net
